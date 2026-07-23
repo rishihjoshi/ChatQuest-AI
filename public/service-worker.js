@@ -16,6 +16,7 @@ const APP_SHELL = [
   '/js/app.js',
   '/js/api-client.js',
   '/js/models.js',
+  '/js/markdown.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',

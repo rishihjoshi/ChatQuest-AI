@@ -88,10 +88,22 @@ function isSameOriginRequest(request) {
   // No Origin and no usable Referer => a direct curl/script hit. Reject.
   if (!candidate) return false;
 
-  // Local development over http://localhost:* / http://127.0.0.1:*
+  // Local development over http://localhost:* / http://127.0.0.1:*.
+  //
+  // This exemption is gated on the request having actually ARRIVED at a
+  // localhost host. Accepting a localhost Origin unconditionally would let
+  // anyone bypass the whole check against the deployed site with a one-line
+  // curl -H 'Origin: http://localhost:3000', which is exactly the quota-burning
+  // case this function exists to stop.
   try {
     const { hostname, protocol } = new URL(candidate);
-    if (protocol === 'http:' && (hostname === 'localhost' || hostname === '127.0.0.1')) return true;
+    const isLoopback = (name) => name === 'localhost' || name === '127.0.0.1' || name === '[::1]';
+    if (protocol === 'http:' && isLoopback(hostname)) {
+      const host = request.headers.get('host') || '';
+      // Strip the port before comparing; Host carries one, hostname does not.
+      const hostName = host.replace(/:\d+$/, '');
+      return isLoopback(hostName);
+    }
   } catch {
     return false;
   }

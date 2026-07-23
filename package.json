@@ -7,7 +7,10 @@
   "scripts": {
     "build": "node scripts/generate-icons.js && node scripts/generate-version.js",
     "dev": "vercel dev",
-    "verify": "node scripts/verify-models.js"
+    "verify": "node scripts/verify-models.js",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:unit": "node --test \"test/unit/*.test.mjs\"",
+    "test:integration": "node --test \"test/integration/*.test.mjs\""
   },
   "engines": {
     "node": ">=18"

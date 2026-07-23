@@ -8,6 +8,7 @@
 
 import { MODELS, MAX_MODELS, DEFAULT_MODEL_IDS, getModel } from './models.js';
 import { streamChat, ChatError } from './api-client.js';
+import { escapeHtml, renderMarkdown } from './markdown.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -19,9 +20,17 @@ let selected = [...DEFAULT_MODEL_IDS];
 /**
  * Per-model runtime state. Survives selection changes so unchecking and
  * re-checking a model does not lose its thread.
- * @type {Map<string, {history: Array<{role:string,content:string}>, refs: object|null}>}
+ *
+ * `stream` is non-null only while a response is in flight and holds the text
+ * received so far. It lives on the pane rather than in askModel's closure so
+ * that a mid-stream rebuildPanes() can re-attach the partial answer to the new
+ * DOM — see restoreStreamBubble().
+ *
+ * @type {Map<string, {history: Array<{role:string,content:string}>, refs: object|null, stream: {text:string}|null}>}
  */
 const panes = new Map();
+
+const TYPING_HTML = '<span class="typing"><i></i><i></i><i></i></span>';
 
 /** @type {Map<string, AbortController>} in-flight requests, keyed by model ID */
 const inFlight = new Map();
@@ -150,7 +159,7 @@ function rebuildPanes() {
 
   selected.forEach((id, index) => {
     const model = getModel(id);
-    const pane = panes.get(id) || { history: [], refs: null };
+    const pane = panes.get(id) || { history: [], refs: null, stream: null };
     panes.set(id, pane);
 
     const el = document.createElement('section');
@@ -170,8 +179,12 @@ function rebuildPanes() {
     els.panes.append(el);
     pane.refs = { el, body: el.querySelector('.pane-body'), dot: el.querySelector('.pane-dot') };
 
-    // Re-render any history this model already accumulated.
+    // Re-render any history this model already accumulated, then re-attach a
+    // response that is still streaming. Without this, rebuilding the panes
+    // mid-stream would leave the in-flight answer writing into a detached node
+    // and it would never appear at all.
     for (const message of pane.history) appendMessage(pane, message.role, message.content, true);
+    restoreStreamBubble(pane);
 
     const tab = document.createElement('button');
     tab.type = 'button';
@@ -198,7 +211,10 @@ function showTab(index, smooth = true) {
   // scroll offset — and it's the exact inverse of what the scroll listener below
   // computes, so the tab strip and the track can never disagree. (No-op on
   // desktop, where the track is a grid with overflow-x: hidden.)
-  els.panes.scrollTo({ left: activeTab * els.panes.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  // scrollTo's behavior option overrides the CSS scroll-behavior rule, so the
+  // reduced-motion preference has to be honoured here too.
+  const animate = smooth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  els.panes.scrollTo({ left: activeTab * els.panes.clientWidth, behavior: animate ? 'smooth' : 'auto' });
   syncTabs();
 }
 
@@ -301,6 +317,19 @@ function send() {
   for (const id of targets) askModel(id, prompt);
 }
 
+/**
+ * Attach a bubble for an in-flight response to the pane's (possibly brand-new)
+ * DOM, showing whatever has streamed so far. Called both when the request
+ * starts and again after any rebuildPanes() that happens mid-stream.
+ */
+function restoreStreamBubble(pane) {
+  if (!pane.stream || !pane.refs) return;
+  const bubble = appendMessage(pane, 'assistant', '', true);
+  bubble.classList.add('is-streaming');
+  bubble.innerHTML = pane.stream.text ? renderMarkdown(pane.stream.text) : TYPING_HTML;
+  pane.refs.streamBubble = bubble;
+}
+
 async function askModel(id, prompt) {
   const pane = panes.get(id);
   if (!pane) return;
@@ -308,19 +337,30 @@ async function askModel(id, prompt) {
   pane.history.push({ role: 'user', content: prompt });
   appendMessage(pane, 'user', prompt);
 
-  const bubble = appendMessage(pane, 'assistant', '');
-  bubble.classList.add('is-streaming');
-  bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+  // Note the deliberate indirection: never capture the bubble element in this
+  // closure. Toggling a model in the picker rebuilds every pane's DOM, and a
+  // captured node would go detached — the answer would stream into nothing.
+  // Always write through pane.refs, which rebuildPanes() keeps current.
+  pane.stream = { text: '' };
+  restoreStreamBubble(pane);
   setPaneState(pane, 'busy');
 
   const controller = new AbortController();
   inFlight.set(id, controller);
 
-  let text = '';
   let frame = null;
+  // Abort rejections land a turn later than the abort() call, so by the time we
+  // handle one, "New chat" may already have cleared this pane. Identity of the
+  // stream object tells us whether this turn is still the pane's current one;
+  // if it isn't, we must not touch history or the DOM.
+  const stream = pane.stream;
+  const isCurrent = () => pane.stream === stream;
+  const live = () => (isCurrent() ? pane.refs?.streamBubble ?? null : null);
   const paint = () => {
     frame = null;
-    bubble.innerHTML = renderMarkdown(text);
+    const bubble = live();
+    if (!bubble) return;
+    bubble.innerHTML = renderMarkdown(stream.text);
     scrollPaneToEnd(pane);
   };
 
@@ -330,7 +370,7 @@ async function askModel(id, prompt) {
       messages: pane.history,
       signal: controller.signal,
       onDelta: (chunk) => {
-        text += chunk;
+        stream.text += chunk;
         // Coalesce repaints to one per frame — token-by-token innerHTML on four
         // panes at once is otherwise the thing that makes the UI stutter.
         if (frame === null) frame = requestAnimationFrame(paint);
@@ -338,33 +378,40 @@ async function askModel(id, prompt) {
     });
 
     if (frame !== null) cancelAnimationFrame(frame);
+    if (!isCurrent()) return;
     paint();
 
+    const text = stream.text;
     if (text.trim()) {
       pane.history.push({ role: 'assistant', content: text });
-    } else {
-      bubble.innerHTML = '<em class="muted">The model returned an empty response.</em>';
+    } else if (live()) {
+      live().innerHTML = '<em class="muted">The model returned an empty response.</em>';
     }
     setPaneState(pane, 'done');
   } catch (err) {
     if (frame !== null) cancelAnimationFrame(frame);
+    if (!isCurrent()) return;
+    const text = stream.text;
 
     if (err?.name === 'AbortError') {
       // Keep whatever streamed before the user hit Stop, so the turn stays a
       // complete user/assistant pair. With nothing streamed, drop the user
       // message too — a dangling user turn breaks role alternation for the
       // providers that require it.
-      bubble.innerHTML = text ? renderMarkdown(text) : '<em class="muted">Stopped.</em>';
+      if (live()) live().innerHTML = text ? renderMarkdown(text) : '<em class="muted">Stopped.</em>';
       if (text.trim()) pane.history.push({ role: 'assistant', content: text });
       else pane.history.pop();
       setPaneState(pane, 'idle');
     } else {
       // Failure is scoped to this pane. Every other pane keeps streaming.
       const message = err instanceof ChatError ? err.message : 'Something went wrong with this model.';
-      bubble.classList.add('is-error');
-      bubble.innerHTML =
-        (text ? renderMarkdown(text) : '') +
-        `<div class="pane-error"><strong>Error</strong>${escapeHtml(message)}</div>`;
+      const bubble = live();
+      if (bubble) {
+        bubble.classList.add('is-error');
+        bubble.innerHTML =
+          (text ? renderMarkdown(text) : '') +
+          `<div class="pane-error"><strong>Error</strong>${escapeHtml(message)}</div>`;
+      }
       // Roll the failed exchange out of history entirely (the user message we
       // just pushed). The transcript on screen still shows what happened, but
       // this model's context stays clean and strictly role-alternating for the
@@ -373,10 +420,18 @@ async function askModel(id, prompt) {
       setPaneState(pane, 'error');
     }
   } finally {
-    bubble.classList.remove('is-streaming');
+    if (isCurrent()) {
+      live()?.classList.remove('is-streaming');
+      // Hand the bubble over to plain history rendering from here on.
+      // isCurrent() compares pane.stream === stream and there is no await
+      // between that check and this assignment, so nothing can interleave.
+      // eslint-disable-next-line require-atomic-updates -- guarded by isCurrent()
+      pane.stream = null;
+      if (pane.refs) pane.refs.streamBubble = null;
+      scrollPaneToEnd(pane);
+    }
     inFlight.delete(id);
     if (inFlight.size === 0) setBusy(false);
-    scrollPaneToEnd(pane);
   }
 }
 
@@ -401,103 +456,16 @@ function newChat() {
   abortAll();
   for (const pane of panes.values()) {
     pane.history = [];
+    // Dropping the stream object is what tells a late-arriving abort handler
+    // that its turn is stale and must not write back into the cleared pane.
+    pane.stream = null;
     if (pane.refs) {
       pane.refs.body.innerHTML = '';
+      pane.refs.streamBubble = null;
       setPaneState(pane, 'idle');
     }
   }
   els.input.focus();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Minimal markdown — escape first, then format. Never inserts raw model output.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-function renderMarkdown(source) {
-  if (!source) return '';
-
-  // Split on fenced code blocks. An odd trailing fence means the model is still
-  // mid-block, so the remainder renders as code rather than flashing as prose.
-  const parts = source.split(/```/);
-  let html = '';
-
-  parts.forEach((part, index) => {
-    if (index % 2 === 1) {
-      const newline = part.indexOf('\n');
-      const lang = newline === -1 ? '' : part.slice(0, newline).trim();
-      const code = newline === -1 ? part : part.slice(newline + 1);
-      html += `<pre class="code"${lang ? ` data-lang="${escapeHtml(lang)}"` : ''}><code>${escapeHtml(code.replace(/\n$/, ''))}</code></pre>`;
-    } else {
-      html += renderProse(part);
-    }
-  });
-
-  return html;
-}
-
-function renderProse(text) {
-  if (!text.trim()) return '';
-
-  const lines = escapeHtml(text).split('\n');
-  let html = '';
-  let listTag = null;
-  let paragraph = [];
-
-  const flushParagraph = () => {
-    if (paragraph.length) {
-      html += `<p>${inline(paragraph.join('<br>'))}</p>`;
-      paragraph = [];
-    }
-  };
-  const closeList = () => {
-    if (listTag) {
-      html += `</${listTag}>`;
-      listTag = null;
-    }
-  };
-
-  for (const line of lines) {
-    const bullet = line.match(/^\s*[-*+]\s+(.*)$/);
-    const numbered = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    const heading = line.match(/^(#{1,4})\s+(.*)$/);
-
-    if (bullet || numbered) {
-      flushParagraph();
-      const wanted = bullet ? 'ul' : 'ol';
-      if (listTag !== wanted) {
-        closeList();
-        html += `<${wanted}>`;
-        listTag = wanted;
-      }
-      html += `<li>${inline((bullet || numbered)[1])}</li>`;
-    } else if (heading) {
-      flushParagraph();
-      closeList();
-      const level = Math.min(heading[1].length + 2, 6);
-      html += `<h${level}>${inline(heading[2])}</h${level}>`;
-    } else if (!line.trim()) {
-      flushParagraph();
-      closeList();
-    } else {
-      closeList();
-      paragraph.push(line);
-    }
-  }
-
-  flushParagraph();
-  closeList();
-  return html;
-}
-
-function inline(text) {
-  return text
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|\W)\*([^*\n]+)\*(?=\W|$)/g, '$1<em>$2</em>');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
