@@ -224,6 +224,7 @@ public/img/hero.jpg          hero artwork + ambient backdrop
 scripts/generate-version.js  stamps the build id into all three places
 assets/app-icon.png          source artwork for the icons
 scripts/generate-icons.js    derives every icon size from it — no image dependencies
+eslint.config.mjs            lint rules — correctness-weighted, no plugins
 scripts/verify-models.js     checks the allow-list against OpenRouter's catalogue
 vercel.json                  cache headers (version.json no-store) + security headers
 ```

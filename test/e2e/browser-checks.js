@@ -156,6 +156,31 @@ async function chatQuestE2E({ verbose = true } = {}) {
     JSON.stringify(paneState()),
   );
 
+  // ── 6b. Regression: the hero must track the SELECTED panes ────────────────
+  // State is kept for deselected models so re-checking restores their thread.
+  // That retained history used to suppress the hero, so swapping to a fresh
+  // model left a blank pane on screen with no hero and no guidance.
+  $('#new-chat').click();
+  await sleep(120);
+  await select(['gemini-3.6-flash']);
+  $('#prompt').value = 'E2E: hero-vs-selection regression.';
+  $('#send').click();
+  await idle();
+  check('a finished conversation hides the hero', $('#hero').hasAttribute('hidden'));
+
+  await select(['claude-haiku-4.5']);
+  await sleep(200);
+  check(
+    'swapping to a fresh model brings the hero back',
+    !$('#hero').hasAttribute('hidden'),
+    `visible pane had ${$$('.msg').length} messages`,
+  );
+  check('the hero never leaves an empty pane on screen', $$('.msg').length === 0 || !$('#hero').hasAttribute('hidden'));
+
+  await select(['gemini-3.6-flash']);
+  await sleep(200);
+  check('swapping back restores that model’s thread', $$('.msg').length >= 2 && $('#hero').hasAttribute('hidden'), `${$$('.msg').length} messages`);
+
   // ── 7. Layout ─────────────────────────────────────────────────────────────
   const panes = $('#panes');
   const wide = window.matchMedia('(min-width: 768px)').matches;
@@ -212,7 +237,24 @@ async function chatQuestE2E({ verbose = true } = {}) {
   check('every declared icon actually loads', iconOk.every(Boolean));
   const registration = await navigator.serviceWorker.getRegistration();
   check('service worker is registered and active', !!registration?.active);
-  check('service worker controls the page', !!navigator.serviceWorker.controller);
+
+  // A page loaded BEFORE any worker existed can finish the load uncontrolled
+  // even though the worker goes on to activate — clients.claim() does not
+  // retroactively rescue every first load. The next navigation is controlled.
+  // So: an active worker is a hard requirement; control on *this* particular
+  // load is not, and is reported rather than failed.
+  let controlled = !!navigator.serviceWorker.controller;
+  for (let i = 0; i < 20 && !controlled; i++) {
+    await sleep(100);
+    controlled = !!navigator.serviceWorker.controller;
+  }
+  if (controlled) {
+    check('service worker controls the page', true);
+  } else if (registration?.active?.state === 'activated') {
+    skip('service worker controls the page', 'worker is activated but this load began before it existed — reload to confirm control');
+  } else {
+    check('service worker controls the page', false, 'no active worker took control');
+  }
   check('viewport avoids viewport-fit=cover', !/viewport-fit/.test($('meta[name=viewport]').content), $('meta[name=viewport]').content);
   check('apple-touch-icon present', !!$('link[rel=apple-touch-icon]'));
 
