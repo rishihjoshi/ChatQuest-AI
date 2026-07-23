@@ -146,6 +146,22 @@ Beyond that, the proxy:
 
 ---
 
+## Changing the app icon
+
+Replace [assets/app-icon.png](assets/app-icon.png) and rebuild:
+
+```bash
+npm run build
+```
+
+Every icon is derived from that one file — nothing is hand-exported, so the sizes can't drift apart. The generator (no image dependencies, just `zlib`) does three things worth knowing about:
+
+- **Keys out the surround.** The source is opaque RGB with white around the plate; shipped as-is that's a white square on the home screen. The background is flood-filled inwards from the four corners, so the white letters of the wordmark — enclosed by the dark plate — are never touched.
+- **Sizes the maskable icon automatically.** Android crops maskable icons to whatever shape the launcher likes, guaranteeing only the middle 80%. The script measures how far the real content (bright or saturated pixels, ignoring the plate and its rounded corners) sits from centre and scales to fit inside that circle. With the current artwork that lands at 64%, with 21px of headroom at 512. Swap in different artwork and the scale re-derives itself rather than silently clipping.
+- **Emits a separate opaque `apple-touch-icon.png`.** iOS ignores alpha and flattens it against black, and applies its own squircle, so it needs full bleed rather than the maskable inset.
+
+Ideal source artwork: square, at least 512×512 (1024 is better), with important detail away from the very edge.
+
 ## Verifying a deploy
 
 ```bash
@@ -190,9 +206,10 @@ public/css/styles.css
 public/js/models.js          allow-list — shared by browser AND proxy
 public/js/api-client.js      the only module that knows /api/chat's wire format
 public/js/app.js             UI, panes, streaming, update banner
-public/icons/                generated PNGs (192, 512, maskable)
+public/icons/                generated PNGs (192, 512, maskable, apple-touch)
 scripts/generate-version.js  stamps the build id into all three places
-scripts/generate-icons.js    renders the icons — no image dependencies
+assets/app-icon.png          source artwork for the icons
+scripts/generate-icons.js    derives every icon size from it — no image dependencies
 scripts/verify-models.js     checks the allow-list against OpenRouter's catalogue
 vercel.json                  cache headers (version.json no-store) + security headers
 ```
