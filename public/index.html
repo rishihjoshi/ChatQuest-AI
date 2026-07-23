@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <!-- Viewport: deliberately NO viewport-fit=cover. Without it the iOS viewport
+       already ends above the home indicator, so env(safe-area-inset-*) reads 0
+       in the browser and small-but-correct in standalone PWA mode. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ChatQuest">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Android PWA -->
+  <meta name="application-name" content="ChatQuest-AI">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <meta name="theme-color" content="#0b0f17">
+  <meta name="description" content="Ask one question, compare answers from ChatGPT, Claude and Gemini side by side.">
+
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/css/styles.css">
+  <title>ChatQuest-AI</title>
+
+  <script>
+    /* Build identifier, rewritten by scripts/generate-version.js at build time
+       from the same source as /version.json. The update check compares this
+       constant — the version this page was actually built with — against the
+       server's current version. Never hand-edit. */
+    window.__APP_VERSION__ = "dev";
+  </script>
+</head>
+<body>
+  <div id="app">
+
+    <div id="update-banner" class="banner banner-update" role="status" hidden>
+      <span>New version available</span>
+      <button type="button" id="update-refresh">Refresh</button>
+    </div>
+
+    <div id="offline-banner" class="banner banner-offline" role="status" hidden>
+      Offline — you can browse this session, but new prompts will fail.
+    </div>
+
+    <header class="app-header">
+      <h1 class="app-title">ChatQuest<span>-AI</span></h1>
+      <div class="header-actions">
+        <button type="button" id="picker-toggle" class="btn btn-ghost" aria-expanded="false" aria-controls="picker">
+          <span id="picker-summary">3 models</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="new-chat" class="btn btn-ghost" title="Clear all panes">New chat</button>
+      </div>
+    </header>
+
+    <div id="picker" class="picker" hidden>
+      <div id="picker-list" class="picker-list"></div>
+      <p id="picker-hint" class="picker-hint"></p>
+    </div>
+
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Selected models"></nav>
+
+    <main id="panes" class="panes"></main>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <textarea id="prompt" rows="1" placeholder="Ask every model at once…" aria-label="Your prompt"></textarea>
+      <button type="button" id="stop" class="btn btn-stop" hidden>Stop</button>
+      <button type="submit" id="send" class="btn btn-send">
+        <span id="send-label">Send to 3 models</span>
+      </button>
+    </form>
+
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
