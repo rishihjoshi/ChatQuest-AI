@@ -222,7 +222,12 @@ function rebuildPanes() {
  * though the pane headers are not on screen yet.
  */
 function syncHero() {
-  const empty = [...panes.values()].every((pane) => pane.history.length === 0 && !pane.stream);
+  // Only the SELECTED panes count. State is deliberately kept for deselected
+  // models so re-checking one restores its thread — but letting that hidden
+  // history vote here meant swapping to a fresh model left the user staring at
+  // a blank pane with the hero suppressed and nothing on screen at all.
+  const visible = selected.map((id) => panes.get(id)).filter(Boolean);
+  const empty = visible.every((pane) => pane.history.length === 0 && !pane.stream);
 
   els.hero.toggleAttribute('hidden', !empty);
   els.panes.toggleAttribute('hidden', empty);

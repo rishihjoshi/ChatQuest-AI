@@ -10,7 +10,9 @@
     "verify": "node scripts/verify-models.js",
     "test": "node --test \"test/**/*.test.mjs\"",
     "test:unit": "node --test \"test/unit/*.test.mjs\"",
-    "test:integration": "node --test \"test/integration/*.test.mjs\""
+    "test:integration": "node --test \"test/integration/*.test.mjs\"",
+    "lint": "eslint . --max-warnings=0",
+    "check": "npm run lint && npm test"
   },
   "engines": {
     "node": ">=18"
