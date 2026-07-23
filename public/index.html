@@ -66,7 +66,19 @@
 
     <nav id="tabs" class="tabs" role="tablist" aria-label="Selected models"></nav>
 
-    <main id="panes" class="panes"></main>
+    <!-- Shown until the first prompt is sent, then replaced by the panes. -->
+    <section id="hero" class="hero">
+      <div class="hero-art">
+        <img src="/img/hero.jpg" alt="" decoding="async" fetchpriority="high">
+      </div>
+      <div class="hero-copy">
+        <h2>One prompt. Every model.</h2>
+        <p>Ask once and watch the answers arrive side by side — so you can see where they agree, and where they don’t.</p>
+        <ul id="hero-models" class="hero-models" aria-label="Models this prompt will go to"></ul>
+      </div>
+    </section>
+
+    <main id="panes" class="panes" hidden></main>
 
     <form id="composer" class="composer" autocomplete="off">
       <textarea id="prompt" rows="1" placeholder="Ask every model at once…" aria-label="Your prompt"></textarea>

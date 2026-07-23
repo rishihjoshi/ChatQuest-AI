@@ -22,13 +22,64 @@
   --text-dim: #99a3b6;
   --text-faint: #6b7488;
   --accent: #5b8cff;
+  --accent-strong: #2f5fd0;
   --accent-ink: #ffffff;
   --ok: #3ddc97;
   --warn: #ffb454;
   --err: #ff6b6b;
 
   --radius: 12px;
+
+  /* Per-provider colour. JS overwrites these on each pane, tab, picker row and
+     hero chip; the values here are the neutral fallback for anything unthemed. */
+  --brand: #8fa0bd;
+  --brand-soft: rgba(143, 160, 189, 0.14);
+  --brand-glow: rgba(143, 160, 189, 0.07);
 }
+
+/* ── Ambient background ──────────────────────────────────────────────────────
+   The hero artwork, held behind the whole app: fixed so it doesn't slide when
+   panes scroll, and knocked well back so it reads as atmosphere rather than
+   content. Everything above it sits on translucent surfaces.                */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('/img/hero.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.38;
+  filter: saturate(1.15);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/*
+ * Scrim. Tuned by eye against the chat view: heavy enough that body text never
+ * competes with the artwork's bright orbs, light enough that the artwork is
+ * still legibly there. Text itself always sits on its own opaque bubble, so
+ * this only has to protect the gaps between them.
+ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(125% 85% at 50% 0%, rgba(11, 15, 23, 0.42), rgba(11, 15, 23, 0.74) 62%),
+    linear-gradient(180deg, rgba(11, 15, 23, 0.5), rgba(11, 15, 23, 0.8));
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app { position: relative; z-index: 1; }
+
+/* While the hero is on screen the artwork is already the main visual, so pull
+   the ambient copy of it right back — two versions of the same image at once
+   reads as a rendering fault rather than a backdrop. Driven by a class from
+   syncHero() rather than :has(), so the state is explicit and testable. */
+body.is-hero::before { opacity: 0.09; }
+body.is-hero::after { background: linear-gradient(180deg, rgba(11, 15, 23, 0.82), rgba(11, 15, 23, 0.92)); }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -87,14 +138,17 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .btn-ghost:hover:not(:disabled) { background: var(--bg-raised); color: var(--text); }
 
 .btn-send {
-  background: var(--accent);
+  /* Deeper than --accent on purpose: white on the lighter accent measures
+     3.16:1, below the 4.5 minimum for body-size text. --accent stays as-is for
+     borders and focus rings, which carry no text. */
+  background: var(--accent-strong);
   color: var(--accent-ink);
   font-size: 14px;
   font-weight: 600;
   padding: 10px 18px;
   white-space: nowrap;
 }
-.btn-send:hover:not(:disabled) { background: #6f9bff; }
+.btn-send:hover:not(:disabled) { background: #3f74e6; }
 
 .btn-stop {
   background: transparent;
@@ -182,7 +236,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
 .picker-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto auto 1fr;
   gap: 10px;
   align-items: start;
   padding: 9px 10px;
@@ -192,6 +246,23 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 }
 .picker-row:hover { background: rgba(255, 255, 255, 0.04); }
 .picker-row.is-disabled { opacity: 0.4; cursor: not-allowed; }
+/* Selected rows wear their provider's colour, matching the pane they produce. */
+.picker-row:has(input:checked) {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.picker-icon {
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 7px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  display: grid;
+  place-items: center;
+}
+.picker-icon svg { display: block; }
 
 .picker-row input[type="checkbox"] {
   width: 18px;
@@ -208,7 +279,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--brand);
 }
 .picker-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 
@@ -238,23 +309,147 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
   border-radius: 999px;
   border: 1px solid var(--line-strong);
-  background: transparent;
+  background: rgba(18, 24, 38, 0.7);
   color: var(--text-dim);
   cursor: pointer;
   flex: 1 1 0;
   min-width: max-content;
 }
-.tab.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+.tab-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--brand);
+  display: block;
 }
+.tab-icon svg { display: block; }
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 13ch;
+}
+.tab.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--text);
+}
+/* The icon already carries the brand colour; on the active tab it would sit on
+   a tinted chip of the same hue, so lift it to full strength. */
+.tab.is-active .tab-icon { color: var(--brand); }
+
+.tabs.is-hidden { display: none; }
 
 @media (min-width: 768px) {
   .tabs { display: none; }
+}
+
+/* ── Hero (empty state) ──────────────────────────────────────────────────── */
+
+.hero {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Centre the block. The artwork is 2:1, so on a tall phone it only fills a
+     band of the column — without this the remainder collects as dead space
+     under the copy. */
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hero-art {
+  position: relative;
+  flex: 0 1 auto;
+  /* Give the artwork real presence on narrow screens; object-fit crops in
+     towards the robot rather than letterboxing. */
+  min-height: min(34vh, 250px);
+  overflow: hidden;
+}
+.hero-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Centre on the robot and the three orbs. Whatever this crops off the top and
+     bottom is handled by the scrim below. */
+  object-position: center 52%;
+}
+/*
+ * Fade both edges. The artwork carries its own baked-in headline and footer
+ * chips, and at most viewport ratios the crop lands mid-way through them — a
+ * half-sliced line of text reads as broken layout. Fading the edges into the
+ * page turns an arbitrary crop into a deliberate vignette, at any aspect.
+ */
+.hero-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, var(--bg) 0%, rgba(11, 15, 23, 0.72) 6%, transparent 20%),
+    linear-gradient(180deg, transparent 55%, rgba(11, 15, 23, 0.88) 90%, var(--bg) 100%);
+  pointer-events: none;
+}
+
+.hero-copy {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 4px 20px 22px;
+  margin-top: -8px;
+}
+.hero-copy h2 {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.hero-copy p {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  max-width: 46ch;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.hero-models {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px 6px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand);
+}
+.hero-chip-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+.hero-chip-icon svg { display: block; }
+
+@media (min-width: 768px) {
+  .hero-copy { padding: 8px 24px 30px; }
+  .hero-copy h2 { font-size: 27px; }
+  .hero-copy p { font-size: 15px; }
 }
 
 /* ── Pane track ──────────────────────────────────────────────────────────── */
@@ -277,7 +472,17 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  background: var(--bg-pane);
+  /* Translucent so the artwork behind shows through, plus a brand-tinted wash
+     falling away from the header — this is what makes each pane identifiable
+     from the corner of your eye when four are streaming at once. */
+  /*
+   * Deliberately quite transparent. Readability is protected by the message
+   * bubbles, which are near-opaque — so the artwork shows through the gutters
+   * and the empty space below a conversation, and never behind body text.
+   */
+  background:
+    linear-gradient(180deg, var(--brand-glow), transparent 240px),
+    rgba(15, 20, 32, 0.42);
   border-right: 1px solid var(--line);
 }
 .pane:last-child { border-right: 0; }
@@ -297,20 +502,35 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg-raised);
+  border-top: 2px solid var(--brand);
+  background: linear-gradient(180deg, var(--brand-soft), transparent), rgba(18, 24, 38, 0.92);
 }
+
+.pane-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.pane-icon svg { display: block; }
 
 .pane-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  margin-left: auto;
   background: var(--text-faint);
 }
-.pane-dot[data-state="busy"] { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+.pane-dot[data-state="busy"] { background: var(--brand); animation: pulse 1.1s ease-in-out infinite; }
 .pane-dot[data-state="done"] { background: var(--ok); }
 .pane-dot[data-state="error"] { background: var(--err); }
 
@@ -325,11 +545,14 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   text-overflow: ellipsis;
 }
 .pane-provider {
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  /* Was --text-faint, which measured 3.46:1 here — under the 4.5 minimum and
+     genuinely hard to read at this size. The brand hue is both brighter and
+     consistent with the same label in the picker. */
+  color: var(--brand);
 }
 
 .pane-body {
@@ -360,14 +583,18 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   user-select: text;
   -webkit-user-select: text;
 }
+/* Neutral on purpose. The same prompt is echoed into every pane, and a coloured
+   user bubble would clash with whichever brand hue that pane is wearing. */
 .msg-user .bubble {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: rgba(43, 53, 74, 0.92);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
   border-bottom-right-radius: 4px;
 }
 .msg-assistant .bubble {
-  background: var(--bg-raised);
+  background: rgba(16, 22, 35, 0.93);
   border: 1px solid var(--line);
+  border-left: 2px solid var(--brand);
   border-bottom-left-radius: 4px;
   max-width: 100%;
   width: 100%;
@@ -428,7 +655,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--brand);
   animation: bounce 1.2s ease-in-out infinite;
 }
 .typing i:nth-child(2) { animation-delay: 0.15s; }
@@ -475,6 +702,43 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
 @media (max-width: 480px) {
   .btn-send { padding: 10px 14px; font-size: 13px; }
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────────
+   Windows/Linux render a full-width classic scrollbar inside every code block
+   and pane, which is visually louder than the content it scrolls. */
+
+.pane-body,
+.bubble pre.code,
+.composer textarea,
+.picker {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.pane-body::-webkit-scrollbar,
+.bubble pre.code::-webkit-scrollbar,
+.composer textarea::-webkit-scrollbar,
+.picker::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.pane-body::-webkit-scrollbar-track,
+.bubble pre.code::-webkit-scrollbar-track,
+.composer textarea::-webkit-scrollbar-track,
+.picker::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pane-body::-webkit-scrollbar-thumb,
+.bubble pre.code::-webkit-scrollbar-thumb,
+.composer textarea::-webkit-scrollbar-thumb,
+.picker::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+.pane-body::-webkit-scrollbar-thumb:hover,
+.bubble pre.code::-webkit-scrollbar-thumb:hover,
+.picker::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 @media (prefers-reduced-motion: reduce) {

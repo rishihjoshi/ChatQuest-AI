@@ -9,6 +9,7 @@
 import { MODELS, MAX_MODELS, DEFAULT_MODEL_IDS, getModel } from './models.js';
 import { streamChat, ChatError } from './api-client.js';
 import { escapeHtml, renderMarkdown } from './markdown.js';
+import { applyBrand } from './brands.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -53,6 +54,8 @@ const els = {
   pickerSummary: $('#picker-summary'),
   pickerHint: $('#picker-hint'),
   newChat: $('#new-chat'),
+  hero: $('#hero'),
+  heroModels: $('#hero-models'),
   updateBanner: $('#update-banner'),
   updateButton: $('#update-refresh'),
   offline: $('#offline-banner'),
@@ -81,12 +84,17 @@ function buildPicker() {
   for (const model of MODELS) {
     const row = document.createElement('label');
     row.className = 'picker-row';
+    const brand = applyBrand(row, model.provider);
 
     const box = document.createElement('input');
     box.type = 'checkbox';
     box.value = model.id;
     box.checked = selected.includes(model.id);
     box.addEventListener('change', () => toggleModel(model.id, box.checked));
+
+    const mark = document.createElement('span');
+    mark.className = 'picker-icon';
+    mark.innerHTML = brand.icon;
 
     const text = document.createElement('span');
     text.className = 'picker-text';
@@ -95,7 +103,7 @@ function buildPicker() {
       `<span class="picker-provider">${escapeHtml(model.provider)}</span>` +
       `<span class="picker-desc">${escapeHtml(model.description)}</span>`;
 
-    row.append(box, text);
+    row.append(box, mark, text);
     els.pickerList.append(row);
   }
 
@@ -166,13 +174,15 @@ function rebuildPanes() {
     el.className = 'pane';
     el.dataset.model = id;
     el.setAttribute('aria-label', model.label);
+    const brand = applyBrand(el, model.provider);
     el.innerHTML = `
       <header class="pane-head">
-        <span class="pane-dot" data-state="idle"></span>
+        <span class="pane-icon">${brand.icon}</span>
         <span class="pane-title">
           <span class="pane-name">${escapeHtml(model.label)}</span>
           <span class="pane-provider">${escapeHtml(model.provider)}</span>
         </span>
+        <span class="pane-dot" data-state="idle" title="idle"></span>
       </header>
       <div class="pane-body" tabindex="0"></div>`;
 
@@ -189,7 +199,9 @@ function rebuildPanes() {
     const tab = document.createElement('button');
     tab.type = 'button';
     tab.className = 'tab';
-    tab.textContent = model.label;
+    applyBrand(tab, model.provider);
+    tab.innerHTML = `<span class="tab-icon">${brand.icon}</span><span class="tab-label">${escapeHtml(model.short || model.label)}</span>`;
+    tab.title = model.label;
     tab.addEventListener('click', () => showTab(index));
     els.tabs.append(tab);
   });
@@ -201,6 +213,35 @@ function rebuildPanes() {
   activeTab = Math.min(activeTab, selected.length - 1);
   showTab(activeTab, false);
   syncTabs();
+  syncHero();
+}
+
+/**
+ * The hero stands in for the panes until the first prompt goes out. It lists
+ * the models currently selected, so the picker's state is still visible even
+ * though the pane headers are not on screen yet.
+ */
+function syncHero() {
+  const empty = [...panes.values()].every((pane) => pane.history.length === 0 && !pane.stream);
+
+  els.hero.toggleAttribute('hidden', !empty);
+  els.panes.toggleAttribute('hidden', empty);
+  els.tabs.classList.toggle('is-hidden', empty);
+  // Dims the ambient backdrop while the hero shows the same artwork full size.
+  document.body.classList.toggle('is-hero', empty);
+
+  if (!empty) return;
+
+  els.heroModels.innerHTML = '';
+  for (const id of selected) {
+    const model = getModel(id);
+    if (!model) continue;
+    const chip = document.createElement('li');
+    chip.className = 'hero-chip';
+    const brand = applyBrand(chip, model.provider);
+    chip.innerHTML = `<span class="hero-chip-icon">${brand.icon}</span><span>${escapeHtml(model.label)}</span>`;
+    els.heroModels.append(chip);
+  }
 }
 
 /** Mobile: scroll the track to a pane. Streams in other panes are untouched. */
@@ -311,6 +352,13 @@ function send() {
   els.input.value = '';
   autoGrow();
   setBusy(true);
+
+  // Swap the hero out for the panes on the click itself, rather than a beat
+  // later when the first token lands.
+  els.hero.setAttribute('hidden', '');
+  els.panes.removeAttribute('hidden');
+  els.tabs.classList.remove('is-hidden');
+  document.body.classList.remove('is-hero');
 
   // Kick every request off in the same tick. Nothing waits on anything else —
   // each pane renders its own stream the moment its first token lands.
@@ -465,6 +513,7 @@ function newChat() {
       setPaneState(pane, 'idle');
     }
   }
+  syncHero();
   els.input.focus();
 }
 

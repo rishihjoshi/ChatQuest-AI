@@ -11,6 +11,10 @@
  * Editing the catalogue: add/remove entries below. IDs must be valid OpenRouter
  * model slugs — see https://openrouter.ai/models. Anything not listed here is
  * rejected by the proxy with a 400 before it ever reaches OpenRouter.
+ *
+ * `short` is the compact name for the mobile tab strip, where the brand icon
+ * already identifies the provider and repeating it in text only causes the
+ * label to truncate.
  */
 
 export const MAX_MODELS = 4;
@@ -18,6 +22,7 @@ export const MAX_MODELS = 4;
 export const MODELS = [
   {
     id: 'openai/gpt-5.6-sol',
+    short: 'GPT-5.6 Sol',
     label: 'ChatGPT — GPT-5.6 Sol',
     provider: 'OpenAI',
     description: 'OpenAI flagship. Strongest general reasoning, slower and priciest of the trio.',
@@ -25,12 +30,14 @@ export const MODELS = [
   },
   {
     id: 'openai/gpt-5.4-mini',
+    short: 'GPT-5.4 Mini',
     label: 'ChatGPT — GPT-5.4 Mini',
     provider: 'OpenAI',
     description: 'Cheap, quick OpenAI model. Good for drafting and everyday questions.',
   },
   {
     id: 'anthropic/claude-sonnet-5',
+    short: 'Sonnet 5',
     label: 'Claude — Sonnet 5',
     provider: 'Anthropic',
     description: 'Anthropic workhorse. Excellent at long-form writing, code and instructions.',
@@ -38,12 +45,14 @@ export const MODELS = [
   },
   {
     id: 'anthropic/claude-haiku-4.5',
+    short: 'Haiku 4.5',
     label: 'Claude — Haiku 4.5',
     provider: 'Anthropic',
     description: 'Fastest Claude. Near-instant first token, well suited to short answers.',
   },
   {
     id: 'google/gemini-3.6-flash',
+    short: '3.6 Flash',
     label: 'Gemini — 3.6 Flash',
     provider: 'Google',
     description: 'Google’s fast multimodal model with a very large context window.',
@@ -51,18 +60,21 @@ export const MODELS = [
   },
   {
     id: 'google/gemini-3.1-pro-preview',
+    short: '3.1 Pro',
     label: 'Gemini — 3.1 Pro (preview)',
     provider: 'Google',
     description: 'Google’s top-end reasoning model. Preview channel — may change without notice.',
   },
   {
     id: 'deepseek/deepseek-v3.2',
+    short: 'V3.2',
     label: 'DeepSeek — V3.2',
     provider: 'DeepSeek',
     description: 'Open-weight and very cheap. A useful sanity check against the frontier labs.',
   },
   {
     id: 'meta-llama/llama-3.3-70b-instruct',
+    short: 'Llama 3.3 70B',
     label: 'Llama — 3.3 70B Instruct',
     provider: 'Meta',
     description: 'Open-weight Meta model. Lowest cost per token in this list.',

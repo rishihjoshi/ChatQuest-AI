@@ -146,6 +146,18 @@ Beyond that, the proxy:
 
 ---
 
+## Look and feel
+
+**The hero artwork does double duty.** [public/img/hero.jpg](public/img/hero.jpg) is the empty state before the first prompt, and the same image sits behind the whole app as an ambient backdrop. The panes are deliberately translucent while the message bubbles are near-opaque, so the artwork reads through the gutters and the empty space under a conversation but never behind body text. While the hero itself is on screen the ambient copy is dimmed — two versions of one image at once looks like a rendering fault.
+
+**Each pane wears its provider's colours.** [public/js/brands.js](public/js/brands.js) maps a provider to an accent, two tints, and an inline SVG mark. `applyBrand()` writes `--brand`, `--brand-soft` and `--brand-glow` onto a pane, tab, picker row or hero chip, and the stylesheet keys off those. With four models streaming at once, hue is the fastest way to tell whose answer you're reading — faster than reading the headers.
+
+Hues are spread around the wheel rather than matched exactly to each vendor. Google, DeepSeek and Meta all brand blue, and three near-identical blues side by side defeats the point of the layout, so DeepSeek leans violet (its own mark is already indigo) and Meta leans teal. `test/unit/brands.test.mjs` fails if any two accents come within 25° of each other, if a model names a provider with no brand, or if an icon hard-codes a colour instead of inheriting `currentColor`.
+
+The marks are simplified glyphs drawn in this repo for identification, not vendor logo files. They carry no external requests, which matters because the deployed page's CSP blocks them and the app has to render offline from cache.
+
+**Contrast is measured, not eyeballed.** Translucent surfaces over a photograph make contrast impossible to reason about from CSS alone, so it was checked by rendering the real page with every glyph transparent and sampling the composited pixels under each text element. Everything clears WCAG AA in the hero, desktop chat, error and mobile-tab states. Two things failed that audit and were fixed: the pane provider label (3.46:1 — now uses the brand hue) and the send button, which had been white on `--accent` at 3.16:1 since the first build and now uses a deeper `--accent-strong`.
+
 ## Changing the app icon
 
 Replace [assets/app-icon.png](assets/app-icon.png) and rebuild:
@@ -204,9 +216,11 @@ public/service-worker.js     offline shell cache, version-keyed
 public/version.json          generated every build (gitignored)
 public/css/styles.css
 public/js/models.js          allow-list — shared by browser AND proxy
+public/js/brands.js          per-provider colour + inline SVG mark
 public/js/api-client.js      the only module that knows /api/chat's wire format
 public/js/app.js             UI, panes, streaming, update banner
 public/icons/                generated PNGs (192, 512, maskable, apple-touch)
+public/img/hero.jpg          hero artwork + ambient backdrop
 scripts/generate-version.js  stamps the build id into all three places
 assets/app-icon.png          source artwork for the icons
 scripts/generate-icons.js    derives every icon size from it — no image dependencies
