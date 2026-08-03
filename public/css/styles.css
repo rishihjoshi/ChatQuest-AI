@@ -492,10 +492,18 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   .panes {
     display: grid;
     grid-template-columns: repeat(var(--pane-count, 3), minmax(0, 1fr));
+    /* Pin the single row to the track height. Without this the implicit row is
+       auto-sized to its tallest content, so a long conversation stretched each
+       pane past the viewport; since .panes is overflow-y:hidden, that overflow
+       was clipped and unreachable — the pane-body never got a bounded height to
+       scroll inside. This is the fix for "can't scroll on laptop". */
+    grid-template-rows: 100%;
     overflow-x: hidden;
     scroll-snap-type: none;
   }
-  .pane { flex: initial; }
+  /* min-height:0 lets the grid item shrink below its content so the inner
+     .pane-body (flex:1) becomes the scroll container instead of overflowing. */
+  .pane { flex: initial; min-height: 0; }
 }
 
 .pane-head {
