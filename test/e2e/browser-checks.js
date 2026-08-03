@@ -218,6 +218,33 @@ async function chatQuestE2E({ verbose = true } = {}) {
   }
   check('no horizontal page overflow', document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
+  // ── 7b. A long answer scrolls inside its pane; the pane never outgrows the
+  // track. Regression: on desktop the grid row used to auto-size to content, so
+  // a long conversation stretched the pane past the viewport and the overflow
+  // was clipped, unreachable — "can't scroll on laptop".
+  {
+    // This invariant holds no matter the content length: a pane is exactly the
+    // track height, never taller. It is the structural half of the fix.
+    const tallest = $$('.pane').reduce((m, p) => Math.max(m, p.getBoundingClientRect().height), 0);
+    check('a pane never grows taller than the track', tallest <= panes.clientHeight + 1, `tallest pane ${Math.round(tallest)} vs track ${panes.clientHeight}`);
+
+    // When an answer does overflow, it must scroll inside the pane-body — and
+    // the scroll must actually commit. scroll-behavior:smooth animates the
+    // assignment and a non-compositing page freezes that animation, so
+    // neutralise it, exactly as a real trackpad or scrollbar drag bypasses it.
+    const longBody = $$('.pane-body').find((b) => b.scrollHeight - b.clientHeight > 40);
+    if (longBody) {
+      check('a long answer is scrollable inside its pane-body', longBody.scrollHeight > longBody.clientHeight, `scrollH ${longBody.scrollHeight} clientH ${longBody.clientHeight}`);
+      const prior = longBody.style.scrollBehavior;
+      longBody.style.scrollBehavior = 'auto';
+      longBody.scrollTop = 200;
+      const moved = longBody.scrollTop;
+      longBody.scrollTop = 0;
+      longBody.style.scrollBehavior = prior;
+      check('pane-body scroll position actually moves', moved >= 190, `scrollTop landed at ${Math.round(moved)}`);
+    }
+  }
+
   // ── 8. PWA ────────────────────────────────────────────────────────────────
   const manifest = await (await fetch('/manifest.json')).json();
   check('manifest is standalone', manifest.display === 'standalone', manifest.display);
